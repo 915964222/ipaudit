@@ -76,22 +76,8 @@ POST /api/probe/session        创建探针会话
 POST /api/probe/submit         探针回传（服务端交叉比对出环境评级）
 GET  /api/probe/{token}        查询比对结果
 GET/POST /api/monitor          监控列表 / 新增（评分跌破阈值 webhook 告警）
-POST /api/customer             建订阅客户（--auth 模式）
 GET  /api/health               存活
 ```
-
-## 订阅模式（P2，¥99/月形态）
-
-```bash
-python -m ipaudit serve --auth        # 扫描接口要求 X-API-Token，按客户计配额
-curl -X POST http://127.0.0.1:9650/api/customer -d '{"plan":"basic"}'
-# → {"api_token": "ipk_..."}   basic 200 IP，pro 2000 IP
-curl -H "X-API-Token: ipk_..." http://127.0.0.1:9650/api/scan/8.8.8.8
-```
-
-- `customer` 表只存 token 和配额，**不存任何真实身份信息**（红线第 3 条）。
-- 报告页（`/api/report/{id}.html`）不要求 token——证据链就是要发给客户看的。
-- 超配额返回 429。
 
 ## 监控告警
 
