@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# 运行数据（SQLite 含扫描历史与探针会话，不入库）
+data/
+*.db
+
+# 报告产物
+report/
+serve_test.log
+serve.log
+*.log
+
+# 标定产物（result.json 可再生）
+calibration/result.json
+
+# 环境
+.env

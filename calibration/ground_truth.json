@@ -1,0 +1,32 @@
+{
+  "_说明": "ground truth 标定集。expected: expected_residence 三分类 + expected_grade 档位（grade 允许相邻一档浮动）。IP 选用公认稳定的基础设施与运营商段；住宅段选 ISP 静态命名池，避免今日动态重新分配导致漂移。",
+  "_建议": "住宅段若漂移，重跑 calibration/run.py 看四路证据明细即可定位是哪路证据变化。",
+  "cases": [
+    {"ip": "8.8.8.8",        "label": "Google DNS",              "expected_residence": "hosting",   "expected_grade": ["risky", "dead"]},
+    {"ip": "1.1.1.1",        "label": "Cloudflare DNS",          "expected_residence": "hosting",   "expected_grade": ["risky", "dead"]},
+    {"ip": "9.9.9.9",        "label": "Quad9 DNS",               "expected_residence": "hosting",   "expected_grade": ["risky", "dead"]},
+    {"ip": "208.67.222.222", "label": "OpenDNS",                 "expected_residence": "hosting",   "expected_grade": ["risky", "dead"]},
+    {"ip": "151.101.1.140",  "label": "Fastly CDN",              "expected_residence": "hosting",   "expected_grade": ["risky", "dead"]},
+
+    {"ip": "45.134.140.1",   "label": "CDN77/Datacamp",          "expected_residence": "hosting",   "expected_grade": ["usable", "risky", "dead"]},
+    {"ip": "185.220.101.1",  "label": "Tor 出口 Zwiebeltuete",   "expected_residence": "hosting",   "expected_grade": ["risky", "dead"]},
+    {"ip": "5.188.206.1",    "label": "PeterStar/机房段",        "expected_residence": "hosting",   "expected_grade": ["usable", "risky", "dead"]},
+    {"ip": "194.147.140.1",  "label": "Datacamp 系 BE",          "expected_residence": "hosting",   "expected_grade": ["usable", "risky", "dead"]},
+    {"ip": "23.106.33.1",    "label": "Psychz LA 机房",          "expected_residence": "hosting",   "expected_grade": ["usable", "risky", "dead"]},
+
+    {"ip": "73.12.45.8",     "label": "Comcast 住宅命名段",      "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "98.110.3.7",     "label": "Verizon FIOS 住宅",       "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "108.210.45.67",  "label": "AT&T lightspeed 住宅",    "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "c-池占位.invalid", "label": "跳过非法条目",           "expected_residence": "skip",      "expected_grade": []},
+    {"ip": "76.218.64.10",   "label": "Charter/Spectrum 住宅",   "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+
+    {"ip": "71.85.132.24",   "label": "Cox 住宅",                "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "65.30.12.100",   "label": "Bell Canada 住宅",        "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "82.132.200.5",   "label": "Telefónica/Vivo 类住宅",  "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "84.17.46.1",     "label": "CDN77 UK (标定勘误)",     "expected_residence": "hosting",   "expected_grade": ["usable", "risky", "dead"]},
+    {"ip": "110.163.128.9",  "label": "SoftBank 日本移动住宅",   "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+
+    {"ip": "117.136.38.10",  "label": "China Mobile CMNET 家宽", "expected_residence": "resident",  "expected_grade": ["clean", "usable"]},
+    {"ip": "221.192.148.5",  "label": "China Unicom 家宽",       "expected_residence": "resident",  "expected_grade": ["clean", "usable"]}
+  ]
+}
