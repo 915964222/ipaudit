@@ -78,15 +78,6 @@ CREATE TABLE IF NOT EXISTS alert_log (
     reason        TEXT,
     delivered     INTEGER DEFAULT 0
 );
-
-CREATE TABLE IF NOT EXISTS customer (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    api_token     TEXT UNIQUE,           -- 客户身份，仅此一个凭据，不存任何真实身份信息
-    plan          TEXT,                  -- basic(200 IP) / pro(2000 IP)
-    scan_quota    INTEGER DEFAULT 200,   -- 本计费周期可扫 IP 数
-    scans_used    INTEGER DEFAULT 0,
-    created_at    TEXT
-);
 """
 
 
@@ -217,38 +208,3 @@ class Store:
                 " VALUES(?,?,?,?,?)",
                 (monitor_id, time.strftime("%Y-%m-%dT%H:%M:%S%z"), old, new, reason))
             self._conn.commit()
-
-    # ---- customer（订阅制多客户，P2）----
-
-    def create_customer(self, plan: str = "basic") -> tuple[int, str]:
-        import secrets
-        plan = plan if plan in ("basic", "pro") else "basic"
-        quota = 200 if plan == "basic" else 2000
-        token = "ipk_" + secrets.token_urlsafe(24)
-        with self._lock:
-            cur = self._conn.execute(
-                "INSERT INTO customer(api_token, plan, scan_quota, scans_used, created_at)"
-                " VALUES(?,?,?,0,?)",
-                (token, plan, quota, time.strftime("%Y-%m-%dT%H:%M:%S%z")))
-            self._conn.commit()
-            return cur.lastrowid, token
-
-    def get_customer_by_token(self, token: str) -> dict | None:
-        if not token or not token.startswith("ipk_"):
-            return None
-        row = self._conn.execute(
-            "SELECT * FROM customer WHERE api_token=?", (token,)).fetchone()
-        return dict(row) if row else None
-
-    def consume_quota(self, customer_id: int) -> bool:
-        """配额内返回 True 并 +1；超配额返回 False。"""
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT scan_quota, scans_used FROM customer WHERE id=?",
-                (customer_id,)).fetchone()
-            if not row or row["scans_used"] >= row["scan_quota"]:
-                return False
-            self._conn.execute(
-                "UPDATE customer SET scans_used=scans_used+1 WHERE id=?", (customer_id,))
-            self._conn.commit()
-            return True

@@ -115,8 +115,8 @@ ipaudit/
   asn_data.py   人工维护的 ASN 分类表（163 条，核心资产，一季度补一次）
   judge.py      四路证据投票 + 扣分制评分 + 结论生成
   report.py     终端 / JSON / HTML 三种渲染
-  store.py      SQLite（scan / dnsbl_hit / probe / monitor / alert_log / customer）
-  server.py     ThreadingHTTPServer + 探针交叉比对 + 监控循环 + 订阅鉴权
+  store.py      SQLite（scan / dnsbl_hit / probe / monitor / alert_log）
+  server.py     ThreadingHTTPServer + 探针交叉比对 + 监控循环
   probe_page.py 单文件探针页（无依赖，客户打开即用）
   cli.py        命令行入口
 calibration/    标定脚本与基准集（P0 验收：21/21 = 100%）
@@ -148,9 +148,9 @@ python -m PyInstaller --noconfirm ipaudit.spec   # 产物 dist/ipaudit.exe（约
 ipaudit resolver-check                    # Spamhaus 通不通
 ipaudit resolver-check --recursion-test <解析器公网IP>   # 开放递归 = 放大器，必须 REFUSED
 
-# HTTP 服务：默认 127.0.0.1；非回环绑定强制 --auth，否则拒绝启动
+# HTTP 服务：默认 127.0.0.1；无鉴权机制，非回环绑定直接拒绝启动
 ipaudit serve                             # 本机
-ipaudit serve --bind 10.66.0.2 --auth     # 跨机：WireGuard IP + token 鉴权
+# 跨机访问用 SSH 隧道：ssh -L 9650:127.0.0.1:9650 <主机>
 ```
 
 完整步骤与第三方验证方法见 `deploy/DEPLOY.md`。

@@ -359,12 +359,11 @@ class TestCrossCheck(unittest.TestCase):
 class TestListenerAndResolverChecks(unittest.TestCase):
     """监听与访问控制（防被扫成放大器/免费扫描器）。"""
 
-    def test_non_loopback_bind_requires_auth(self):
-        # 0.0.0.0 无 --auth → SystemExit 拒绝启动
+    def test_non_loopback_bind_rejected(self):
+        # 服务无鉴权，非回环绑定一律拒绝启动（防被扫成免费扫描器）
         from ipaudit.server import AuditService, make_server
         import tempfile
-        svc = AuditService(os.path.join(tempfile.mkdtemp(), "t.db"),
-                           require_auth=False)
+        svc = AuditService(os.path.join(tempfile.mkdtemp(), "t.db"))
         with self.assertRaises(SystemExit):
             make_server(9659, svc, bind="0.0.0.0")
 
@@ -406,18 +405,6 @@ class TestListenerAndResolverChecks(unittest.TestCase):
             self.assertFalse(r["open_recursion"])
         finally:
             dnsbl._resolve = orig
-
-    def test_customer_quota(self):
-        import tempfile
-        from ipaudit.store import Store
-        s = Store(os.path.join(tempfile.mkdtemp(), "t.db"))
-        cid, tok = s.create_customer("basic")
-        self.assertTrue(tok.startswith("ipk_"))
-        self.assertTrue(s.get_customer_by_token(tok)["scan_quota"] == 200)
-        # 拉满后 consume 返回 False
-        s._conn.execute("UPDATE customer SET scans_used=scan_quota")
-        s._conn.commit()
-        self.assertFalse(s.consume_quota(cid))
 
 
 if __name__ == "__main__":

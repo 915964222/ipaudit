@@ -12,6 +12,7 @@
   GET  /api/health           存活检查
 
 红线：不提供任何出站代理；probe 不存账号关联。
+无鉴权机制 → 只允许回环绑定（make_server 强制）。
 """
 
 from __future__ import annotations
@@ -69,12 +70,10 @@ def valid_ip(ip: str) -> bool:
 
 
 class AuditService:
-    def __init__(self, db_path: str, resolver: str | None = None, deep: bool = False,
-                 require_auth: bool = False):
+    def __init__(self, db_path: str, resolver: str | None = None, deep: bool = False):
         self.store = Store(db_path)
         self.resolver = resolver
         self.deep = deep
-        self.require_auth = require_auth   # 订阅模式：扫描类接口要 X-API-Token
         self._scan_lock = threading.Lock()   # ip-api 45 req/min，串行化扫描
         self._stop = threading.Event()
         self._monitor_thread: threading.Thread | None = None
@@ -232,12 +231,13 @@ def _is_loopback(host: str) -> bool:
 
 
 def make_server(port: int, service: AuditService, bind: str = "127.0.0.1"):
-    """创建 HTTP 服务。非回环绑定强制要求 --auth（防被扫成免费扫描器）。"""
-    if not _is_loopback(bind) and not service.require_auth:
+    """创建 HTTP 服务。扫描接口是资源型接口（打外部 API + DNSBL），
+    无鉴权机制，因此只允许回环绑定——防止被扫成免费扫描器。"""
+    if not _is_loopback(bind):
         raise SystemExit(
-            f"拒绝启动：绑定 {bind}（非回环）但未开 --auth。\n"
-            "跨机访问必须加 --auth（X-API-Token 鉴权 + 配额），"
-            "防止被扫成免费扫描器。")
+            f"拒绝启动：绑定 {bind}（非回环）。本服务无鉴权，只允许 127.0.0.1；\n"
+            "跨机访问请用 SSH 隧道（ssh -L 9650:127.0.0.1:9650 <主机>）或"
+            "前置反向代理加鉴权。")
     return ThreadingHTTPServer((bind, port), make_handler(service))
 
 
@@ -278,17 +278,6 @@ def make_handler(service: AuditService) -> type:
         def _client_ip(self) -> str:
             return self.client_address[0]
 
-        def _auth(self) -> dict | None:
-            """订阅模式鉴权：X-API-Token 头 → 客户档案（含配额检查）。
-            未启用 require_auth 返回 {}（本地单机模式）；失败返回 None。"""
-            if not service.require_auth:
-                return {}
-            token = self.headers.get("X-API-Token", "")
-            cust = service.store.get_customer_by_token(token)
-            if not cust:
-                return None
-            return cust
-
         # ---- routes ----
 
         def do_GET(self):
@@ -305,16 +294,7 @@ def make_handler(service: AuditService) -> type:
                 self._json({"ok": True, "service": "ipaudit", "tts": None,
                             "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
             elif path.startswith("/api/scan/"):
-                cust = self._auth()
-                if cust is None:
-                    self._json({"ok": False, "error": "缺少或非法 X-API-Token"}, 401)
-                    return
                 ip = path.rsplit("/", 1)[1]
-                if cust and not service.store.consume_quota(cust["id"]):
-                    self._json({"ok": False,
-                                "error": f"配额已用尽（{cust['plan']} {cust['scans_used']}/{cust['scan_quota']}）"},
-                               429)
-                    return
                 self._json(service.scan(ip))
             elif re.fullmatch(r"/api/report/\d+\.html", path):
                 self._report(int(re.findall(r"\d+", path)[0]), "html")
@@ -337,31 +317,14 @@ def make_handler(service: AuditService) -> type:
         def do_POST(self):
             path = urlparse(self.path).path
             if path == "/api/scan":
-                cust = self._auth()
-                if cust is None:
-                    self._json({"ok": False, "error": "缺少或非法 X-API-Token"}, 401)
-                    return
                 body = self._body()
                 ips = body.get("ips") or []
                 ips = [i for i in ips if valid_ip(str(i))][:50]
                 if not ips:
                     self._json({"ok": False, "error": " ips 为空或全部非法"}, 400)
                     return
-                if cust:
-                    left = cust["scan_quota"] - cust["scans_used"]
-                    if left <= 0:
-                        self._json({"ok": False,
-                                    "error": f"配额已用尽（{cust['plan']} {cust['scans_used']}/{cust['scan_quota']}）"},
-                                   429)
-                        return
-                    ips = ips[:left]
                 out = [service.scan(ip) for ip in ips]
                 self._json({"ok": True, "results": out})
-            elif path == "/api/customer":
-                # 创建订阅客户（运营方自己用，本地调用；公开部署时应再加管理密钥）
-                plan = str(self._body().get("plan") or "basic")
-                cid, token = service.store.create_customer(plan)
-                self._json({"ok": True, "customer_id": cid, "api_token": token})
             elif path == "/api/probe/session":
                 token = service.store.create_probe_session()
                 self._json({"ok": True, "token": token,

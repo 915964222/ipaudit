@@ -79,16 +79,13 @@ def cmd_batch(args) -> int:
 
 
 def cmd_serve(args) -> int:
-    service = AuditService(args.db, resolver=args.resolver, deep=args.deep,
-                           require_auth=args.auth)
+    service = AuditService(args.db, resolver=args.resolver, deep=args.deep)
     service.start_monitor_loop()
     httpd = make_server(args.port, service, bind=args.bind)
     url = f"http://{args.bind}:{args.port}"
     print(f"ipaudit 服务已启动: {url}")
     print(f"  探针页  {url}/?t=<token>   （先 POST /api/probe/session 拿 token）")
     print(f"  API     {url}/api/scan/1.2.3.4")
-    if args.auth:
-        print("  鉴权    开启（扫描接口需 X-API-Token；POST /api/customer 建客户）")
     print(f"  数据库  {args.db}")
     print("Ctrl+C 停止")
     try:
@@ -307,9 +304,7 @@ def main(argv=None) -> int:
     vp = sub.add_parser("serve", help="启动本地 API 服务")
     vp.add_argument("--port", type=int, default=DEFAULT_PORT)
     vp.add_argument("--bind", default="127.0.0.1",
-                    help="监听地址，默认 127.0.0.1；跨机绑内网/WireGuard IP 并必须配 --auth")
-    vp.add_argument("--auth", action="store_true",
-                    help="订阅模式：扫描接口要求 X-API-Token 并计配额")
+                    help="监听地址，默认 127.0.0.1；无鉴权机制，非回环绑定会被拒绝")
     vp.set_defaults(func=cmd_serve)
 
     rc = sub.add_parser("resolver-check", help="自检解析器（Spamhaus 可用性 + 开放递归）")
