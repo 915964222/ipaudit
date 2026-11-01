@@ -109,6 +109,16 @@ class AuditService:
                 raw = json.loads(full["raw"])
                 tz_ip = raw.get("timezone", "")
                 cc = raw.get("country_code", "")
+        checks = self.cross_check_by_payload(payload, ip_seen, tz_ip=tz_ip, cc=cc)
+        with self._scan_lock:
+            checks["linked_scan_id"] = self._bind_probe_to_scan(
+                scan["id"] if scan else None, row["id"])
+        return checks
+
+    def cross_check_by_payload(self, payload: dict, ip_seen: str,
+                               tz_ip: str = "", cc: str = "",
+                               obs: "Observation | None" = None) -> dict:
+        """纯比对逻辑（供 clinic 会话复用，不依赖探针落库）。"""
 
         checks: dict = {}
         # 时区一致性
@@ -162,10 +172,12 @@ class AuditService:
         checks["renderer"] = payload.get("renderer", "")
         checks["hc_anomaly"] = bool(payload.get("hc_anomaly"))
 
-        with self._scan_lock:
-            conn_scan = self._bind_probe_to_scan(scan["id"] if scan else None, row["id"])
+        if obs is not None:
+            # clinic 直连模式：IP 维度信息直接来自会话内的 Observation
+            tz_ip = tz_ip or obs.timezone or ""
+            cc = cc or obs.country_code or ""
+        checks["linked_scan_id"] = None
         checks["probe_grade"] = judge_probe(checks)
-        checks["linked_scan_id"] = conn_scan
         checks["ip_seen"] = ip_seen
         checks["tz_ip"] = tz_ip
         checks["country_code"] = cc

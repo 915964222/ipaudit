@@ -6,6 +6,7 @@
 """
 
 import json
+import os
 import tempfile
 import time
 import unittest
@@ -198,3 +199,70 @@ class TestQuotaPrecheck(unittest.TestCase):
         u = Upstream(id="t", base_url="http://x")
         v, _ = sch.probe_quota(u)
         self.assertEqual(v, "ok")
+
+
+class TestClinicCauses(unittest.TestCase):
+    """会诊归因：按封号可能性排序，「换 IP 有没有用」是核心输出。"""
+
+    def _session(self, probe: dict, ip="73.12.45.8", asn=7922, org="Comcast"):
+        import tempfile
+        from ipaudit.clinic import ClinicSession
+        from ipaudit.models import Observation
+        from ipaudit.judge import score_report
+        from ipaudit.server import AuditService
+        svc = AuditService(os.path.join(tempfile.mkdtemp(), "t.db"))
+        cs = ClinicSession(svc.store, "t1", ip)
+        cs.obs = Observation(ip=ip, scanned_at="t", asn=asn, asn_org=org,
+                             asn_type="isp", country_code="US", country="United States",
+                             timezone="America/New_York",
+                             rdns="c-73-12-45-8.hsd1.ca.comcast.net",
+                             rdns_pattern_hits=["residential:hsd"],
+                             thirdparty={"ipapi_is": {"asn_type": "isp", "is_datacenter": False},
+                                         "ip_api": {"hosting": False}})
+        cs.obs.probe = probe
+        cs.rep = score_report(cs.obs)
+        return cs
+
+    def test_webrtc_ranks_first_and_no_ip_swap(self):
+        from ipaudit.clinic import CAUSE_RANK
+        cs = self._session({"webrtc_state": "leak", "webrtc_public": ["1.2.3.4"],
+                            "webrtc_ips": ["1.2.3.4"], "tz": "America/New_York",
+                            "lang": "en-US"})
+        cs.obs.probe["tz_mismatch"] = False
+        cs.obs.probe["lang_mismatch"] = False
+        from ipaudit.judge import score_report
+        cs.rep = score_report(cs.obs)
+        causes = cs.causes()
+        self.assertEqual(causes[0]["rank"], CAUSE_RANK["env_webrtc"])
+        self.assertFalse(causes[0]["ip_swap_helps"])
+
+    def test_env_mismatch_says_dont_buy_ip(self):
+        cs = self._session({"webrtc_state": "restricted", "webrtc_public": [],
+                            "webrtc_ips": [], "tz": "Asia/Shanghai", "tz_mismatch": True,
+                            "tz_expected": "America/New_York", "lang": "en-US"})
+        cs.obs.probe["tz_mismatch"] = True
+        from ipaudit.judge import score_report
+        cs.rep = score_report(cs.obs)
+        causes = cs.causes()
+        self.assertTrue(any("换 IP 解决不了" in c["action"] or not c["ip_swap_helps"]
+                            for c in causes if c["rank"] == 2))
+        v = cs.verdict()
+        self.assertIn("别买新 IP", v)
+
+    def test_clean_env_points_to_account_behavior(self):
+        cs = self._session({"webrtc_state": "restricted", "webrtc_public": [],
+                            "webrtc_ips": [], "tz": "America/New_York", "lang": "en-US"})
+        causes = cs.causes()
+        self.assertEqual(len(causes), 1)
+        self.assertIn("账号行为", causes[0]["action"])
+
+    def test_dnsbl_hit_says_ip_swap_helps(self):
+        from ipaudit.dnsbl import DnsblResult
+        cs = self._session({"webrtc_state": "restricted", "webrtc_public": [],
+                            "webrtc_ips": [], "tz": "America/New_York", "lang": "en-US"})
+        cs.obs.dnsbl = [DnsblResult("spamhaus_zen", "hit", ["127.0.0.4"], 30)]
+        from ipaudit.judge import score_report
+        cs.rep = score_report(cs.obs)
+        causes = cs.causes()
+        bl = next(c for c in causes if c["rank"] == 3)
+        self.assertTrue(bl["ip_swap_helps"])

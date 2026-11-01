@@ -89,6 +89,7 @@ def ip_to_int(ip: str) -> int:
 class Store:
     def __init__(self, path: str):
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        self.db_path = path
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
