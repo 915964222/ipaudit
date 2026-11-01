@@ -29,7 +29,6 @@ _输入一个 IP，输出一份「这个 IP 到底干不干净、以及为什么
 [API](#api) ·
 [监控告警](#监控告警) ·
 [标定](#标定-p0-验收) ·
-[打包](#打包pyinstaller) ·
 [访问控制](#监听与访问控制防放大器免费扫描器)
 
 ## 三条红线（写进了代码结构，不是免责声明）
@@ -212,16 +211,6 @@ tests/          40 个离线单测
 deploy/         unbound 配置 + 部署自检指引
 ```
 
-## 打包（PyInstaller）
-
-```bash
-python -m PyInstaller --noconfirm ipaudit.spec   # 产物 dist/ipaudit.exe（约 9MB 单文件）
-```
-
-- 入口必须用 `launch.py`（顶层绝对导入）；`ipaudit/__main__.py` 的相对导入在单文件模式下没有父包，会 ImportError。
-- 已实测：`dist/ipaudit.exe 8.8.8.8` 真实扫描、`--json` 机器可读、`--help` 正常。
-- exe 同级生成 `data/ipaudit.db`；「我的工具大全」里以 kind=tool 挂 `ipaudit.exe`，运行按钮直接启动。
-
 ## 监听与访问控制（防放大器/免费扫描器）
 
 解析器（unbound）与 HTTP 服务两条线都要控：
@@ -241,11 +230,9 @@ ipaudit serve                             # 本机
 
 完整步骤与第三方验证方法见 `deploy/DEPLOY.md`。
 
-## 数据库位置（exe 模式必读）
+## 数据库
 
-exe 的 SQLite 库固定在 **exe 同级** `data/ipaudit.db`（不是 %TEMP% 解包目录——
-单文件模式每次启动换临时目录，写那里 = 重启丢数据）。源码模式在项目 `data/`。
-要迁移历史数据，把整个 `data/` 目录跟 exe 放一起即可。
+默认 `data/ipaudit.db`，`--db` 可覆盖。迁移历史数据直接搬整个 `data/` 目录。
 
 ---
 
