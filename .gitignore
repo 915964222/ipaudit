@@ -23,3 +23,7 @@ calibration/result.json
 
 # 环境
 .env
+
+# 上游登记表含 api_key 字段；state/ 是运行态
+upstreams.json
+state/
