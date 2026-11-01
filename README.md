@@ -153,6 +153,20 @@ python -m ipaudit watch list
 写 `alert_log` 并 POST webhook（`{ip, reason, score, fired_at}`），投递成功置
 `delivered=1`。
 
+## 代理预筛（proxy-harvest）
+
+抓 8 个公共免费代理源 → 去重 → 并发探活 → 输出可直接粘贴进
+ClaudeCN「自定义列表」的格式（每行一条 `http://ip:port` 或 `socks5://ip:port`，
+按延迟排序）：
+
+```bash
+python -m ipaudit proxy-harvest --count 30 --out proxy_list.txt
+```
+
+- `--count` 目标存活条数（默认 30，给 ClaudeCN 目标 10 留 3 倍余量）
+- 源失败自动重试；免费源波动大，某次全超时属正常，隔几小时重跑
+- 只做连通性探测（TCP / 单次 HTTP GET），确认即断开，不建立数据通道
+
 ## 标定（P0 验收）
 
 ```bash

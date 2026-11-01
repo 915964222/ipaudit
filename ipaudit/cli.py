@@ -167,6 +167,39 @@ def cmd_watch(args) -> int:
     return 0
 
 
+def cmd_proxy_harvest(args) -> int:
+    """免费代理预筛：抓公共源 → 探活 → 输出 ClaudeCN 自定义列表格式。"""
+    from .proxy_harvest import harvest
+
+    def on_progress(done, total):
+        print(f"\r  验证进度 {done}/{total}", end="", file=sys.stderr, flush=True)
+
+    print(f"抓取 8 个免费源并探活（目标 {args.count} 条，超时 {args.timeout}s）…")
+    r = harvest(max_alive=args.count, sample_per_source=args.sample,
+                probe_timeout=args.timeout, progress=on_progress)
+    print(file=sys.stderr)
+
+    for s in sorted(r.source_results, key=lambda x: -x["count"]):
+        status = f"{s['count']} 条" if not s["error"] else f"失败: {s['error'][:40]}"
+        print(f"  {s['name']:<24} {status}", file=sys.stderr)
+    print(f"\n候选 {r.total_fetched} 条 → 存活 {r.total_alive} 条（{r.duration_ms}ms）",
+          file=sys.stderr)
+
+    if r.output:
+        for line in r.output:
+            print(line)
+        if args.out:
+            os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+            with open(args.out, "w", encoding="utf-8") as f:
+                f.write("\n".join(r.output) + "\n")
+            print(f"\n已写出 {args.out}（可直接粘进 ClaudeCN「自定义列表」）",
+                  file=sys.stderr)
+    else:
+        print("没有存活代理——免费源波动大，隔几小时或换网络重跑", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_resolver_check(args) -> int:
     """部署自检：解析器是否被 Spamhaus 拒 + 是否开放递归（防放大器）。"""
     from .dnsbl import check_open_recursion, check_resolver_health
@@ -274,7 +307,7 @@ def main(argv=None) -> int:
     # 兼容 `ipaudit 1.2.3.4` / `ipaudit --deep 1.2.3.4`：没写子命令时，
     # 在首个裸 IP 前补 scan 子命令，再交给 argparse 正常解析
     SUBCMDS = {"scan", "batch", "serve", "probe", "watch", "resolver-check",
-               "-h", "--help"}
+               "proxy-harvest", "-h", "--help"}
     if argv and argv[0] not in SUBCMDS:
         patched = list(argv)
         for i, a in enumerate(patched):
@@ -313,6 +346,16 @@ def main(argv=None) -> int:
     rc.add_argument("--recursion-test", dest="recursion_test", default=None,
                     help="对指定监听 IP 验证开放递归（部署 unbound 后跑）")
     rc.set_defaults(func=cmd_resolver_check)
+
+    ph = sub.add_parser("proxy-harvest",
+                        help="免费代理预筛，输出 ClaudeCN 自定义列表格式")
+    ph.add_argument("--count", type=int, default=30,
+                    help="目标存活条数（默认 30，ClaudeCN 目标 10 的 3 倍余量）")
+    ph.add_argument("--sample", type=int, default=400,
+                    help="每源抽样上限（默认 400）")
+    ph.add_argument("--timeout", type=float, default=4.0, help="探活超时秒数")
+    ph.add_argument("--out", default=None, help="写出文件路径（默认打 stdout）")
+    ph.set_defaults(func=cmd_proxy_harvest)
 
     pp = sub.add_parser("probe", help="生成一次性探针并等待回传")
     pp.add_argument("--port", type=int, default=DEFAULT_PORT)

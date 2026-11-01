@@ -407,5 +407,38 @@ class TestListenerAndResolverChecks(unittest.TestCase):
             dnsbl._resolve = orig
 
 
+class TestProxyHarvest(unittest.TestCase):
+    """免费代理预筛：解析与输出格式。"""
+
+    def test_parse_plain_lines(self):
+        from ipaudit.proxy_harvest import parse_proxy_lines
+        out = parse_proxy_lines("1.2.3.4:8080\n5.6.7.8:3128\n# comment\n\n", "http")
+        self.assertEqual(out, {"http://1.2.3.4:8080", "http://5.6.7.8:3128"})
+
+    def test_parse_prefixed_lines(self):
+        from ipaudit.proxy_harvest import parse_proxy_lines
+        text = "socks5://1.2.3.4:1080\nhttp://5.6.7.8:80\nftp://9.9.9.9:21\nbad-line\n1.2.3.4:99999"
+        out = parse_proxy_lines(text, "http")
+        self.assertEqual(out, {"socks5://1.2.3.4:1080", "http://5.6.7.8:80"})
+
+    def test_parse_rejects_bad_ip(self):
+        from ipaudit.proxy_harvest import parse_proxy_lines
+        out = parse_proxy_lines("999.1.1.1:80\n1.2.3:80\n1.2.3.4:abc", "http")
+        self.assertEqual(out, set())
+
+    def test_output_format_is_claudecn_compatible(self):
+        # ClaudeCN 自定义列表：每行一条 http://ip:port 或 socks5://ip:port
+        from ipaudit.proxy_harvest import parse_proxy_lines
+        out = parse_proxy_lines("1.2.3.4:8080\n5.6.7.8:1080", "socks5")
+        for line in out:
+            self.assertRegex(line, r"^(http|socks4|socks5)://\d{1,3}(\.\d{1,3}){3}:\d+$")
+
+    def test_probe_rejects_unreachable_quickly(self):
+        from ipaudit.proxy_harvest import probe_proxy
+        key, latency, err = probe_proxy("http://127.0.0.1:1", timeout=1.0)
+        self.assertIsNone(latency)
+        self.assertTrue(err)
+
+
 if __name__ == "__main__":
     unittest.main()

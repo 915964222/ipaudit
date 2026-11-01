@@ -13,6 +13,7 @@ a = Analysis(
         'ipaudit', 'ipaudit.cli', 'ipaudit.dnsbl', 'ipaudit.collector',
         'ipaudit.judge', 'ipaudit.report', 'ipaudit.store', 'ipaudit.server',
         'ipaudit.probe_page', 'ipaudit.asn_data', 'ipaudit.models',
+        'ipaudit.proxy_harvest',
     ],
     hookspath=[],
     hooksconfig={},
