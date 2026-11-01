@@ -235,6 +235,36 @@ def apply_result(u: Upstream, st: State, verdict: str, detail: str, ms: float) -
         st.open_for(OPEN_SECONDS)
 
 
+def probe_quota(u: Upstream) -> tuple[str, str]:
+    """L3 配额预检：上游有配额端点时，余量为 0 直接判 QUOTA，省一次 L2。
+
+    返回 (verdict, detail)：OK / QUOTA / quota_unavailable（端点挂了不熔断，
+    让 L2 的真实请求说话——配额端点失败不代表上游不可用）。"""
+    if not u.quota_path:
+        return OK, ""
+    url = u.base_url.rstrip("/") + u.quota_path
+    req = urllib.request.Request(url, headers={"user-agent": "ipaudit-scheduler/0.1"})
+    try:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            data = json.loads(resp.read().decode("utf-8", "replace"))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return "quota_unavailable", f"配额端点不可达: {url}"
+
+    windows: list[dict] = []
+    for entry in data.get("data", []):
+        windows.extend(entry.get("windows", []))
+    if not windows:
+        return "quota_unavailable", "配额端点无窗口数据"
+
+    match = (u.quota_match or "").lower()
+    relevant = [w for w in windows
+                if not match or match in str(w.get("name", "")).lower()]
+    pool = relevant or windows
+    if any(float(w.get("remaining", 0) or 0) > 0 for w in pool):
+        return OK, ""
+    return QUOTA, f"配额窗口余量为 0（{len(pool)} 个窗口，匹配 '{u.quota_match or 'any'}'）"
+
+
 def probe_one(u: Upstream, st: State, l1_timeout: float = 5.0) -> dict:
     row = {"at": _now(), "id": u.id, "type": u.type, "model": u.model}
     alive, l1_ms, l1_err = probe_l1(u, timeout=l1_timeout)
@@ -244,6 +274,16 @@ def probe_one(u: Upstream, st: State, l1_timeout: float = 5.0) -> dict:
         apply_result(u, st, CONNECT_FAIL, l1_err, l1_ms)
         _append_usage(row)
         return row
+
+    if u.quota_path:
+        q_verdict, q_detail = probe_quota(u)
+        row["quota"] = q_verdict
+        if q_verdict == QUOTA:
+            row.update(verdict=QUOTA, detail=q_detail, ms=round(l1_ms, 1))
+            apply_result(u, st, QUOTA, q_detail, l1_ms)
+            _append_usage(row)
+            return row
+        # quota_unavailable 不熔断，继续走 L2
 
     verdict, detail, ms, echo = probe_l2(u, timeout=u.timeout_s)
     row.update(verdict=verdict, detail=detail, ms=round(ms, 1), model_echo=echo)

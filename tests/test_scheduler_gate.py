@@ -133,3 +133,68 @@ class TestCircuit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestQuotaPrecheck(unittest.TestCase):
+    """L3 配额预检：余量 0 直接熔断，端点挂了不熔断交给 L2。"""
+
+    def _with_response(self, payload):
+        import ipaudit.scheduler as sch
+        import urllib.request as _ur
+        orig = _ur.urlopen
+        class FakeResp:
+            def read(self, n=-1): return json.dumps(payload).encode()
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        _ur.urlopen = lambda req, timeout: FakeResp()
+        return orig, _ur
+
+    def test_zero_remaining_all_windows_is_quota(self):
+        import ipaudit.scheduler as sch
+        import urllib.request as _ur
+        orig, _ur = self._with_response({"data": [{"windows": [
+            {"name": "GLM", "remaining": 0}, {"name": "GLM", "remaining": 0}]}]})
+        try:
+            from ipaudit.upstreams import Upstream
+            u = Upstream(id="t", base_url="http://x", quota_path="/q", quota_match="glm")
+            v, d = sch.probe_quota(u)
+            self.assertEqual(v, "quota")
+            self.assertIn("余量为 0", d)
+        finally:
+            _ur.urlopen = orig
+
+    def test_some_remaining_is_ok(self):
+        import ipaudit.scheduler as sch
+        import urllib.request as _ur
+        orig, _ur = self._with_response({"data": [{"windows": [
+            {"name": "GLM", "remaining": 0}, {"name": "GLM", "remaining": 68}]}]})
+        try:
+            from ipaudit.upstreams import Upstream
+            u = Upstream(id="t", base_url="http://x", quota_path="/q", quota_match="glm")
+            v, _ = sch.probe_quota(u)
+            self.assertEqual(v, "ok")
+        finally:
+            _ur.urlopen = orig
+
+    def test_endpoint_down_is_not_circuit_open(self):
+        # 配额端点失败不代表上游不可用：返回 quota_unavailable，L2 说了算
+        import ipaudit.scheduler as sch
+        import urllib.request as _ur
+        orig = _ur.urlopen
+        def boom(req, timeout):
+            raise OSError("down")
+        _ur.urlopen = boom
+        try:
+            from ipaudit.upstreams import Upstream
+            u = Upstream(id="t", base_url="http://x", quota_path="/q")
+            v, d = sch.probe_quota(u)
+            self.assertEqual(v, "quota_unavailable")
+        finally:
+            _ur.urlopen = orig
+
+    def test_no_quota_path_short_circuits_to_ok(self):
+        import ipaudit.scheduler as sch
+        from ipaudit.upstreams import Upstream
+        u = Upstream(id="t", base_url="http://x")
+        v, _ = sch.probe_quota(u)
+        self.assertEqual(v, "ok")

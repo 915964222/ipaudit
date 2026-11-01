@@ -10,7 +10,9 @@
       "owner": "",
       "source": "",
       "weight": 20,
-      "notes": "从公开列表抓来的，会被拒：type 非法 + owned=false + 缺 owner/source"
+      "notes": "从公开列表抓来的，会被拒：type 非法 + owned=false + 缺 owner/source",
+      "quota_path": "/v1/magpie/quotas",
+      "quota_match": ""
     },
     {
       "id": "borrowed-vps-no-source",
@@ -20,7 +22,9 @@
       "owner": "self",
       "source": "",
       "model": "some-model",
-      "notes": "会被拒：owned 为真但说不清凭什么用它"
+      "notes": "会被拒：owned 为真但说不清凭什么用它",
+      "quota_path": "/v1/magpie/quotas",
+      "quota_match": ""
     },
     {
       "id": "no-model",
@@ -30,7 +34,9 @@
       "owner": "self",
       "source": "本机 magpie",
       "model": "",
-      "notes": "会被拒：llm 缺 model"
+      "notes": "会被拒：llm 缺 model",
+      "quota_path": "/v1/magpie/quotas",
+      "quota_match": ""
     },
     {
       "id": "dead-endpoint-for-demo",
@@ -39,7 +45,9 @@
       "owned": true,
       "owner": "self",
       "source": "本机闲置端口，用于演示 L1 连接失败与熔断",
-      "weight": 1
+      "weight": 1,
+      "quota_path": "/v1/magpie/quotas",
+      "quota_match": ""
     }
   ]
 }

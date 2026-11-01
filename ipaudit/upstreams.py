@@ -43,6 +43,12 @@ class Upstream:
     cost_per_1k: float = 0.0
     enabled: bool = True
     timeout_s: float = DEFAULT_TIMEOUT
+    # L3 配额预检：上游暴露配额查询端点时填这里（相对 base_url）。
+    # 例：magpie 是 /v1/magpie/quotas。探测时余量为 0 直接熔断，省一次 L2。
+    quota_path: str = ""
+    # 配额匹配：上游的窗口名/模型名与本上游对应的规则（不区分大小写的子串）。
+    # 空 = 任一窗口余量 > 0 即视为有配额。
+    quota_match: str = ""
     tags: list[str] = field(default_factory=list)
     notes: str = ""
 
